@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"fmt"
-	"os"
+	"errors"
 )
 
 type inBody struct {
@@ -27,7 +27,7 @@ type Tarball struct {
 func main() {
 	var inputCollection []string
 
-	var uploads map[string]
+	var uploads map[string]Tarball
 
 	m := martini.Classic()
 	m.Get("/", func() string {
@@ -76,18 +76,18 @@ func main() {
 		return tarball.Container.Name + " saved successfully"
 	})
 
-	m.Post("/download_container/:container_name", func(params martini.Params) []byte {
+	m.Get("/download_container/:container_name", func(params martini.Params) ([]byte, error) {
 		containerName := params["container_name"]
 		if _, haskey := uploads[containerName]; haskey {
-			return "error: "+containerName+" does not exist."
+			return nil, errors.New("error: "+containerName+" does not exist.")
 		}
 		tarball := uploads[containerName]
 		response, err := json.Marshal(tarball)
 		if err != nil {
-			return "error converting tarball into a response"
+			return nil, errors.New("error converting tarball into a response")
 		}
 		delete(uploads, containerName)
-		return response
+		return response, nil
 	})
 
 
