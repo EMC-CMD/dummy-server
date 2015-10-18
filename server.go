@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -28,7 +27,7 @@ type Tarball struct {
 func main() {
 	var inputCollection []string
 
-	var uploads map[string]Tarball
+	uploads := make(map[string]Tarball)
 
 	m := martini.Classic()
 	m.Get("/", func() string {
@@ -40,16 +39,22 @@ func main() {
 	})
 
 	m.Post("/in", func(res http.ResponseWriter, req *http.Request) string {
+		fmt.Printf("Received a message!")
 		body, err := ioutil.ReadAll(req.Body)
+		fmt.Printf("You gave me (raw): %s", string(body))
 		if err != nil {
+			fmt.Printf("something went wrong")
 			return "something went wrong"
 		}
 		var in inBody
 		err = json.Unmarshal(body, &in)
 		if err != nil {
+			fmt.Printf("something else went wrong")
+			inputCollection = append(inputCollection, "Couldnt parse it, but here's what I got:\n"+string(body))
 			return "something else went wrong"
 		}
 		inputCollection = append(inputCollection, in.In)
+		fmt.Printf("You gave me: %s", in.In)
 		return fmt.Sprintf("here's what you gave me: "+in.In+"\ncurrent collection size: %v", len(inputCollection))
 	})
 	m.Post("/upload_container", func(res http.ResponseWriter, req *http.Request) string {
@@ -77,18 +82,26 @@ func main() {
 		return fmt.Sprintf("%s saved successfully", tarball.Container.Name)
 	})
 
-	m.Get("/download_container/:container_name", func(params martini.Params) ([]byte, error) {
+	m.Get("/download_container/:container_name", func(params martini.Params) ([]byte) {
 		containerName := params["container_name"]
-		if _, haskey := uploads[containerName]; haskey {
-			return nil, errors.New("error: " + containerName + " does not exist.")
+		if _, haskey := uploads[containerName]; !haskey {
+			return []byte("500: error: " + containerName + " does not exist.")
 		}
 		tarball := uploads[containerName]
 		response, err := json.Marshal(tarball)
 		if err != nil {
-			return nil, errors.New("error converting tarball into a response")
+			return []byte("500: error converting tarball into a response")
 		}
 		delete(uploads, containerName)
-		return response, nil
+		return response
+	})
+
+	m.Get("/list_uploaded_containers", func() ([]byte) {
+		uploaded_containers := "Containers I've got:"
+		for key, _ := range uploads {
+			uploaded_containers = fmt.Sprintf("%s\n%s", uploaded_containers, key)
+		}
+		return []byte(uploaded_containers)
 	})
 
 	m.Run()
